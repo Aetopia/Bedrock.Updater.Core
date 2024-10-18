@@ -15,40 +15,27 @@ static class Store
 
     static readonly WebClient client = new();
 
-    static readonly AppInstallManager appInstallManager = new();
+    internal static readonly AppInstallManager AppInstallManager = new();
 
     static readonly PackageManager packageManager = new();
 
-    static readonly AppUpdateOptions updateOptions = new() { AutomaticallyDownloadAndInstallUpdateIfFound = true };
-
-    // Attempt to request installation of the specified product IDs.
-    internal static IEnumerable<AppInstallItem> Get(params string[] @productIds) => productIds.Select(productId =>
+    internal static IEnumerable<AppInstallItem> Get(params string[] @productIds)
     {
-        // Try to get an existing app from the queue.
-        var appInstallItem = appInstallManager.AppInstallItems.FirstOrDefault(_ => _.ProductId.Equals(productId, StringComparison.OrdinalIgnoreCase));
-
-        // If we couldn't get any existing app from the queue then resolve & add it.
-        if (appInstallItem is null)
+        foreach (var productId in productIds)
         {
-            var (packageFamilyName, skuId) = string.Format(address, productId).Get();
-            appInstallItem = (packageManager.FindPackagesForUser(string.Empty, packageFamilyName).Any()
-            ? appInstallManager.SearchForUpdatesAsync(productId, skuId, string.Empty, string.Empty, updateOptions)
-            : appInstallManager.StartAppInstallAsync(productId, skuId, false, false))?.AsTask().Result;
+            using var stream = client.OpenRead(string.Format(address, productId));
+            using var reader = JsonReaderWriterFactory.CreateJsonReader(stream, XmlDictionaryReaderQuotas.Max);
+            var element = XElement.Load(reader);
+
+            var appInstallItem = (packageManager.FindPackagesForUser(string.Empty, element.Descendants("PackageFamilyName").First().Value).Any()
+            ? AppInstallManager.SearchForUpdatesAsync(productId, element.Descendants("PreferredSkuId").First().Value)
+            : AppInstallManager.StartAppInstallAsync(productId, element.Descendants("PreferredSkuId").First().Value, false, false))?.AsTask().Result;
+
+            if (appInstallItem is not null)
+            {
+                AppInstallManager.MoveToFrontOfDownloadQueue(productId, string.Empty);
+                yield return appInstallItem;
+            }
         }
-
-        // Prioritize our app's installation by moving to the front of the queue.  
-        if (appInstallItem is not null) appInstallManager.MoveToFrontOfDownloadQueue(productId, string.Empty);
-
-        return appInstallItem;
-    });
-
-    // Resolve the package family name & SKU ID.
-    static (string, string) Get(this string address)
-    {
-        using var stream = client.OpenRead(address);
-        using var reader = JsonReaderWriterFactory.CreateJsonReader(stream, XmlDictionaryReaderQuotas.Max);
-        var element = XElement.Load(reader);
-
-        return (element.Descendants("PackageFamilyName").First().Value, element.Descendants("PreferredSkuId").First().Value);
     }
 }

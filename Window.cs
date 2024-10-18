@@ -19,10 +19,6 @@ sealed class Window : System.Windows.Window
 
     AppInstallItem appInstallItem = default;
 
-    readonly AutoResetEvent autoResetEvent = new(false);
-
-    Exception exception = default;
-
     public Window(bool _)
     {
         //  Icon = global::Resources.Get<ImageSource>(".ico");
@@ -53,8 +49,7 @@ sealed class Window : System.Windows.Window
         };
         canvas.Children.Add(progressBar); Canvas.SetLeft(progressBar, 11); Canvas.SetTop(progressBar, 46);
 
-        //  
-        Closed += (_, _) => Environment.Exit(0);
+        Closed += (_, _) => { try { appInstallItem.Cancel(); } catch { } };
 
         Dispatcher.UnhandledException += (_, e) =>
         {
@@ -66,35 +61,29 @@ sealed class Window : System.Windows.Window
 
         ContentRendered += async (_, _) => await Task.Run(() =>
         {
+            using AutoResetEvent autoResetEvent = new(false);
             foreach (var appInstallItem in Store.Get("9WZDNCRD1HKW", _ ? "9P5X4QVLC2XR" : "9NBLGGH2JHXJ"))
             {
-                if ((this.appInstallItem = appInstallItem) is null) continue;
-
-                var appInstallStatus = appInstallItem.GetCurrentStatus();
-                if (appInstallStatus.InstallState is AppInstallState.Canceled or AppInstallState.Error) throw appInstallStatus.ErrorCode;
-                else if (appInstallStatus.InstallState is AppInstallState.Completed) continue;
-
-                appInstallItem.StatusChanged += (sender, args) =>
+                Console.WriteLine(appInstallItem.PackageFamilyName);
+                AppInstallStatus appInstallStatus = default;
+                (this.appInstallItem = appInstallItem).StatusChanged += (sender, args) => Dispatcher.Invoke(() =>
                 {
-                    appInstallStatus = sender.GetCurrentStatus();
-                    Dispatcher.Invoke(() =>
+                    if (progressBar.Value != (appInstallStatus = sender.GetCurrentStatus()).PercentComplete)
                     {
-                        if (progressBar.Value != appInstallStatus.PercentComplete)
-                        {
-                            if (progressBar.IsIndeterminate) progressBar.IsIndeterminate = false;
-                            textBlock2.Text = $"Preparing... {progressBar.Value = appInstallStatus.PercentComplete}%";
-                        }
-                        if (appInstallStatus.InstallState is AppInstallState.Canceled or AppInstallState.Error or AppInstallState.Completed)
-                        {
-                            if (progressBar.IsIndeterminate) progressBar.IsIndeterminate = false;
-                            progressBar.Value = 0;
-                            textBlock2.Text = "Preparing...";
-                            autoResetEvent.Set();
-                        }
-                    });
-                };
+                        if (progressBar.IsIndeterminate) progressBar.IsIndeterminate = false;
+                        textBlock2.Text = $"Preparing... {progressBar.Value = appInstallStatus.PercentComplete}%";
+                    }
 
+                    if (appInstallStatus.InstallState is AppInstallState.Canceled or AppInstallState.Error or AppInstallState.Completed)
+                    {
+                        if (!progressBar.IsIndeterminate) progressBar.IsIndeterminate = true;
+                        progressBar.Value = 0;
+                        textBlock2.Text = "Preparing...";
+                        autoResetEvent.Set();
+                    }
+                });
                 autoResetEvent.WaitOne();
+                if (appInstallStatus.InstallState is AppInstallState.Error or AppInstallState.Canceled) throw appInstallStatus.ErrorCode;
             }
             Dispatcher.Invoke(Close);
         });
