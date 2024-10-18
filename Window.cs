@@ -7,23 +7,31 @@ using System.Windows.Controls;
 using System.Runtime.InteropServices;
 using Windows.ApplicationModel.Store.Preview.InstallControl;
 using System.Threading;
+using System.Reflection;
+using System.Windows.Media.Imaging;
+using Windows.Globalization;
+using System.Linq;
+using System.Xml.Linq;
+using System.Runtime.Serialization.Json;
+using System.Xml;
+using System.Net;
+using Windows.Management.Deployment;
 
 sealed class Window : System.Windows.Window
 {
     [DllImport("Shell32", CharSet = CharSet.Auto, SetLastError = true), DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
-    static extern int ShellMessageBox(nint hAppInst = default, nint hWnd = default, string lpcText = default, string lpcTitle = "Bedrock Updater", int fuStyle = 0x00000010);
-
-    //   enum Unit { B, KB, MB, GB }
-    //
-    //   static string Size(float value) { var unit = (int)Math.Log(value, 1024); return $"{value / Math.Pow(1024, unit):0.00} {(Unit)unit}"; }
+    static extern int ShellMessageBox(nint hAppInst = default, nint hWnd = default, string lpcText = default, string lpcTitle = "Bedrock Updater Core", int fuStyle = 0x00000010);
 
     AppInstallItem appInstallItem = default;
 
+    readonly AppInstallManager appInstallManager = new();
+
     public Window(bool _)
     {
-        //  Icon = global::Resources.Get<ImageSource>(".ico");
+        using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(".ico");
+        Icon = BitmapFrame.Create(stream, BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad);
         UseLayoutRounding = true;
-        Title = "Bedrock Updater Deluxe";
+        Title = "Bedrock Updater Core";
         ResizeMode = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
         SizeToContent = SizeToContent.WidthAndHeight;
@@ -61,14 +69,32 @@ sealed class Window : System.Windows.Window
 
         ContentRendered += async (_, _) => await Task.Run(() =>
         {
+            using WebClient client = new();
             using AutoResetEvent autoResetEvent = new(false);
-            foreach (var appInstallItem in Store.Get("9WZDNCRD1HKW", _ ? "9P5X4QVLC2XR" : "9NBLGGH2JHXJ"))
+            PackageManager packageManager = new();
+            AppUpdateOptions updateOptions = new() { AutomaticallyDownloadAndInstallUpdateIfFound = true };
+            string address = $"https://displaycatalog.mp.microsoft.com/v7.0/products/{{0}}?languages=iv&market={new GeographicRegion().CodeTwoLetter}";
+
+            foreach (var appInstallItem in new string[] { "9WZDNCRD1HKW", _ ? "9P5X4QVLC2XR" : "9NBLGGH2JHXJ" }.Select(productId =>
             {
-                Console.WriteLine(appInstallItem.PackageFamilyName);
+                var appInstallItem = appInstallManager.AppInstallItems.FirstOrDefault(_ => _.ProductId.Equals(productId, StringComparison.OrdinalIgnoreCase));
+                if (appInstallItem is not null) return appInstallItem;
+
+                using var stream = client.OpenRead(string.Format(address, productId));
+                using var reader = JsonReaderWriterFactory.CreateJsonReader(stream, XmlDictionaryReaderQuotas.Max);
+                var element = XElement.Load(reader); var skuId = element.Descendants("PreferredSkuId").First().Value;
+
+                return (packageManager.FindPackagesForUser(string.Empty, element.Descendants("PackageFamilyName").First().Value).Any()
+                ? appInstallManager.SearchForUpdatesAsync(productId, skuId, string.Empty, string.Empty, updateOptions)
+                : appInstallManager.StartAppInstallAsync(productId, skuId, default, default)).AsTask().Result;
+            }))
+            {
+                if (appInstallItem is null) continue;
+                Console.WriteLine(appInstallItem.InstallType);
                 AppInstallStatus appInstallStatus = default;
                 (this.appInstallItem = appInstallItem).StatusChanged += (sender, args) => Dispatcher.Invoke(() =>
                 {
-                    if (progressBar.Value != (appInstallStatus = sender.GetCurrentStatus()).PercentComplete)
+                    if (progressBar.Value != (appInstallStatus = sender.GetCurrentStatus()).PercentComplete && appInstallStatus.PercentComplete != 0)
                     {
                         if (progressBar.IsIndeterminate) progressBar.IsIndeterminate = false;
                         textBlock2.Text = $"Preparing... {progressBar.Value = appInstallStatus.PercentComplete}%";
@@ -80,6 +106,16 @@ sealed class Window : System.Windows.Window
                         progressBar.Value = 0;
                         textBlock2.Text = "Preparing...";
                         autoResetEvent.Set();
+                    }
+                    else if (appInstallStatus.InstallState
+                    is AppInstallState.Paused
+                    or AppInstallState.PausedLowBattery
+                    or AppInstallState.PausedWiFiRecommended
+                    or AppInstallState.PausedWiFiRequired or AppInstallState.ReadyToDownload)
+                    {
+                        if (!progressBar.IsIndeterminate) progressBar.IsIndeterminate = true;
+                        textBlock2.Text = "Preparing..."; progressBar.Value = 0;
+                        appInstallManager.MoveToFrontOfDownloadQueue(sender.ProductId, string.Empty);
                     }
                 });
                 autoResetEvent.WaitOne();

@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <OutputType>Exe</OutputType>
+    <OutputType>WinExe</OutputType>
     <TargetFramework>net481</TargetFramework>
     <LangVersion>latest</LangVersion>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
@@ -11,8 +11,8 @@
     <ApplicationIcon>Resources/.ico</ApplicationIcon>
 
     <AssemblyVersion>1.0.0.0</AssemblyVersion>
-    <AssemblyTitle>Bedrock Updater Deluxe</AssemblyTitle>
-    <Product>Bedrock Updater Deluxe</Product>
+    <AssemblyTitle>Bedrock Updater Core</AssemblyTitle>
+    <Product>Bedrock Updater Core</Product>
     <Copyright>Copyright (C) 2024</Copyright>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <GenerateAssemblyCompanyAttribute>false</GenerateAssemblyCompanyAttribute>
