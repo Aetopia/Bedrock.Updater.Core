@@ -9,12 +9,7 @@ using Windows.ApplicationModel.Store.Preview.InstallControl;
 using System.Threading;
 using System.Reflection;
 using System.Windows.Media.Imaging;
-using Windows.Globalization;
 using System.Linq;
-using System.Xml.Linq;
-using System.Runtime.Serialization.Json;
-using System.Xml;
-using System.Net;
 using Windows.Management.Deployment;
 
 sealed class Window : System.Windows.Window
@@ -69,15 +64,14 @@ sealed class Window : System.Windows.Window
 
         ContentRendered += async (_, _) => await Task.Run(() =>
         {
-            using WebClient client = new();
             using AutoResetEvent autoResetEvent = new(false);
             PackageManager packageManager = new();
             AppUpdateOptions updateOptions = new() { AutomaticallyDownloadAndInstallUpdateIfFound = true };
-            string address = $"https://displaycatalog.mp.microsoft.com/v7.0/products/{{0}}?languages=iv&market={new GeographicRegion().CodeTwoLetter}";
 
-            foreach (var appInstallItem in new (string productId, string packageFamilyName)[] {
-                ("9WZDNCRD1HKW", "Microsoft.XboxIdentityProvider_8wekyb3d8bbwe"),
-                _ ? ("9P5X4QVLC2XR","Microsoft.MinecraftWindowsBeta_8wekyb3d8bbwe") : ("9NBLGGH2JHXJ","Microsoft.MinecraftUWP_8wekyb3d8bbwe") }.Select(_ =>
+            foreach (var appInstallItem in new (string productId, string packageFamilyName)[] { 
+                ("9WZDNCRD1HKW", "Microsoft.XboxIdentityProvider_8wekyb3d8bbwe"), _ ? 
+                ("9P5X4QVLC2XR", "Microsoft.MinecraftWindowsBeta_8wekyb3d8bbwe") : 
+                ("9NBLGGH2JHXJ", "Microsoft.MinecraftUWP_8wekyb3d8bbwe") }.Select(_ =>
             {
                 var appInstallItem = appInstallManager.AppInstallItems.FirstOrDefault(appInstallItem => appInstallItem.ProductId.Equals(_.productId, StringComparison.OrdinalIgnoreCase));
                 if (appInstallItem is not null)
