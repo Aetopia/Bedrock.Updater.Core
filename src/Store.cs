@@ -95,6 +95,7 @@ static class Store
             or AppInstallState.PausedWiFiRequired
             or AppInstallState.ReadyToDownload) manager.MoveToFrontOfDownloadQueue(sender.ProductId, string.Empty);
         };
+        
         await @event.WaitAsync(); if (status.ErrorCode is not null) throw status.ErrorCode;
     }
 }
