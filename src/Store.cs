@@ -76,17 +76,25 @@ static class Store
         var item = await GetAsync(tuple); if (item is null) return;
         Event @event = new(); AppInstallStatus status = default;
 
-        item.Completed += (sender, _) => @event.Set();
         item.StatusChanged += (sender, _) =>
         {
+            status = sender.GetCurrentStatus();
+
+            if (status.InstallState is AppInstallState.Completed or AppInstallState.Canceled or AppInstallState.Error)
+            {
+                if (status.InstallState is AppInstallState.Error) sender.Cancel();
+                @event.Set();
+            }
             if (token.IsCancellationRequested) { sender.Cancel(); return; }
 
-            action(status = sender.GetCurrentStatus());
-
-            if (status.InstallState is AppInstallState.Paused or AppInstallState.PausedLowBattery or AppInstallState.PausedWiFiRecommended or AppInstallState.PausedWiFiRequired or AppInstallState.ReadyToDownload)
-                manager.MoveToFrontOfDownloadQueue(sender.ProductId, string.Empty);
+            action(status);
+            if (status.InstallState
+            is AppInstallState.Paused
+            or AppInstallState.PausedLowBattery
+            or AppInstallState.PausedWiFiRecommended
+            or AppInstallState.PausedWiFiRequired
+            or AppInstallState.ReadyToDownload) manager.MoveToFrontOfDownloadQueue(sender.ProductId, string.Empty);
         };
-
         await @event.WaitAsync(); if (status.ErrorCode is not null) throw status.ErrorCode;
     }
 }

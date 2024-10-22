@@ -79,7 +79,7 @@ sealed class Window : System.Windows.Window
                     if (progressBar.Value != _.PercentComplete)
                     {
                         if (progressBar.IsIndeterminate) progressBar.IsIndeterminate = false;
-                        textBlock2.Text = $"Preparing... {progressBar.Value = _.PercentComplete}";
+                        textBlock2.Text = $"Preparing... {progressBar.Value = _.PercentComplete}%";
                     }
                     if (_.InstallState is AppInstallState.Completed)
                     {
