@@ -9,17 +9,11 @@ using Windows.ApplicationModel.Store.Preview.InstallControl;
 using System.Threading;
 using System.Reflection;
 using System.Windows.Media.Imaging;
-using System.Linq;
-using Windows.Management.Deployment;
 
 sealed class Window : System.Windows.Window
 {
     [DllImport("Shell32", CharSet = CharSet.Auto, SetLastError = true), DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
     static extern int ShellMessageBox(nint hAppInst = default, nint hWnd = default, string lpcText = default, string lpcTitle = "Bedrock Updater Core", int fuStyle = 0x00000010);
-
-    AppInstallItem appInstallItem = default;
-
-    readonly AppInstallManager appInstallManager = new();
 
     public Window(bool _)
     {
@@ -56,7 +50,10 @@ sealed class Window : System.Windows.Window
 
         Task task = default;
 
-        Closed += (_, _) => { source.Cancel(); using var handle = ((IAsyncResult)task)?.AsyncWaitHandle; handle.WaitOne(); };
+        Closed += (_, _) => { 
+            if (task is not null ) {
+                source.Cancel(); using var handle = ((IAsyncResult)task).AsyncWaitHandle; handle.WaitOne();
+         } };
 
         Dispatcher.UnhandledException += (_, e) =>
         {
@@ -68,9 +65,24 @@ sealed class Window : System.Windows.Window
 
         ContentRendered += async (_, _) =>
         {
-            foreach (var productId in new string[] { "9WZDNCRD1HKW", _ ? "9P5X4QVLC2XR" : "9NBLGGH2JHXJ" })
+            foreach (var item in new (string, string)[] {
+                new("9WZDNCRD1HKW", "Microsoft.XboxIdentityProvider_8wekyb3d8bbwe"), _ ?
+                new("9P5X4QVLC2XR", "Microsoft.MinecraftWindowsBeta_8wekyb3d8bbwe") :
+                new("9NBLGGH2JHXJ", "Microsoft.MinecraftUWP_8wekyb3d8bbwe")
+            })
             {
-                await (task = Store.GetAsync(productId, (_) => { }, source.Token));
+                await (task = Store.GetAsync(item, (_) => Dispatcher.Invoke(() =>
+                {
+                    if (progressBar.Value != _.PercentComplete)
+                    {
+                        if (progressBar.IsIndeterminate) progressBar.IsIndeterminate = false;
+                       textBlock2.Text = $"Preparing... {progressBar.Value = _.PercentComplete}";
+                    }
+                    if (_.InstallState is AppInstallState.Completed)
+                    {
+                        progressBar.Value = 0; if (!progressBar.IsIndeterminate) progressBar.IsIndeterminate = true;
+                    }
+                }), source.Token));
             }
             Close();
         };

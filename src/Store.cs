@@ -1,17 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Net;
 using System.Runtime.CompilerServices;
-using System.Runtime.Serialization.Json;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Xml;
-using System.Xml.Linq;
 using Windows.ApplicationModel.Store.Preview.InstallControl;
-using Windows.Management.Deployment;
-using Windows.System.UserProfile;
-
 
 static class Store
 {
@@ -31,70 +25,68 @@ static class Store
         }
     }
 
-    struct Event
+    struct Event()
     {
         readonly static Task task = Task.FromResult(true);
 
-        readonly static Queue<TaskCompletionSource<bool>> queue = new();
+        internal readonly Queue<TaskCompletionSource<bool>> queue = new();
 
-        static bool @bool = default;
+        bool signaled = default;
 
-        internal readonly Task WaitAsync()
+        internal Task WaitAsync()
         {
             lock (queue)
             {
-                if (@bool) { @bool = false; return task; }
+                if (signaled) { signaled = false; return task; }
                 TaskCompletionSource<bool> item = new(); queue.Enqueue(item); return item.Task;
             }
         }
 
-        internal readonly void Set()
+        internal void Set()
         {
             TaskCompletionSource<bool> item = default;
-            lock (queue)
-            {
-                if (queue.Count > 0) item = queue.Dequeue();
-                else if (!@bool) @bool = true;
-            }
+            lock (queue) if (queue.Count > 0) item = queue.Dequeue(); else if (!signaled) signaled = true;
             item?.SetResult(true);
         }
     }
 
-    readonly static PackageManager packageManager = new();
+    [DllImport("Kernel32"), DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+    static extern long GetPackagesByPackageFamily([MarshalAs(UnmanagedType.LPWStr)] string packageFamilyName, out uint count, nint packageFullNames, out uint bufferLength, nint buffer);
 
-    readonly static AppInstallManager appInstallManager = new();
+    const long ERROR_INSUFFICIENT_BUFFER = 0x7A;
 
-    readonly static WebClient client = new();
+    readonly static AppInstallManager manager = new();
 
-    readonly static string address = $"https://displaycatalog.mp.microsoft.com/v7.0/products/{{0}}?languages=iv&market={GlobalizationPreferences.HomeGeographicRegion}";
+    readonly static AppUpdateOptions options = new() { AutomaticallyDownloadAndInstallUpdateIfFound = true };
 
-    readonly static AppUpdateOptions updateOptions = new() { AutomaticallyDownloadAndInstallUpdateIfFound = true };
-
-    static async Task<AppInstallItem> GetAsync(string productId)
+    static async Task<AppInstallItem> GetAsync((string, string) tuple)
     {
-        var appInstallItem = appInstallManager.AppInstallItems.FirstOrDefault(_ => _.ProductId.Equals(productId, StringComparison.OrdinalIgnoreCase));
-        if (appInstallItem is not null) { appInstallManager.MoveToFrontOfDownloadQueue(productId, string.Empty); return appInstallItem; }
-
-      //  using var reader = JsonReaderWriterFactory.CreateJsonReader(await client.DownloadDataTaskAsync(string.Format(address, productId)), XmlDictionaryReaderQuotas.Max);
-        return await appInstallManager.StartAppInstallAsync(productId, string.Empty, false, false);
+        var item = manager.AppInstallItems.FirstOrDefault(_ => _.ProductId.Equals(tuple.Item1, StringComparison.OrdinalIgnoreCase)) ?? await
+        (GetPackagesByPackageFamily(tuple.Item2, out var _, default, out var _, default) == ERROR_INSUFFICIENT_BUFFER
+        ? manager.SearchForUpdatesAsync(tuple.Item1, string.Empty, string.Empty, string.Empty, options)
+        : manager.StartAppInstallAsync(tuple.Item1, string.Empty, false, false));
+        if (item is not null) manager.MoveToFrontOfDownloadQueue(tuple.Item1, string.Empty);
+        return item;
     }
 
-    internal static async Task GetAsync(string productId, Action<AppInstallStatus> action, CancellationToken token)
+    internal static async Task GetAsync((string, string) tuple, Action<AppInstallStatus> action, CancellationToken token)
     {
         await new _();
 
-        var appInstallItem = await GetAsync(productId); if (appInstallItem is null) return;
-        Event @event = new(); AppInstallStatus appInstallStatus = default;
+        var item = await GetAsync(tuple); if (item is null) return;
+        Event @event = new(); AppInstallStatus status = default;
 
-        appInstallItem.StatusChanged += (sender, _) =>
+        item.Completed += (sender, _) => @event.Set();
+        item.StatusChanged += (sender, _) =>
         {
-            if (token.IsCancellationRequested) try { sender.Cancel(); } catch { }
-            appInstallStatus = sender.GetCurrentStatus(); action(appInstallStatus);
-            Console.WriteLine(appInstallStatus.InstallState);
-            if (appInstallStatus.InstallState is AppInstallState.Completed or AppInstallState.Canceled or AppInstallState.Error) @event.Set();
-        };
-        await @event.WaitAsync();
+            if (token.IsCancellationRequested) { try { sender.Cancel(); } catch { } return; }
+            
+            action(status = sender.GetCurrentStatus());
 
-        if (appInstallStatus.InstallState is AppInstallState.Canceled or AppInstallState.Error) throw appInstallStatus.ErrorCode;
+            if (status.InstallState is AppInstallState.Paused or AppInstallState.PausedLowBattery or AppInstallState.PausedWiFiRecommended or AppInstallState.PausedWiFiRequired or AppInstallState.ReadyToDownload)
+                manager.MoveToFrontOfDownloadQueue(sender.ProductId, string.Empty);
+        };
+
+        await @event.WaitAsync(); if (status.ErrorCode is not null) throw status.ErrorCode;
     }
 }
