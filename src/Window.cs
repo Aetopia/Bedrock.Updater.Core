@@ -50,10 +50,13 @@ sealed class Window : System.Windows.Window
 
         Task task = default;
 
-        Closed += (_, _) => { 
-            if (task is not null ) {
+        Closed += (_, _) =>
+        {
+            if (task is not null)
+            {
                 source.Cancel(); using var handle = ((IAsyncResult)task).AsyncWaitHandle; handle.WaitOne();
-         } };
+            }
+        };
 
         Dispatcher.UnhandledException += (_, e) =>
         {
@@ -76,11 +79,13 @@ sealed class Window : System.Windows.Window
                     if (progressBar.Value != _.PercentComplete)
                     {
                         if (progressBar.IsIndeterminate) progressBar.IsIndeterminate = false;
-                       textBlock2.Text = $"Preparing... {progressBar.Value = _.PercentComplete}";
+                        textBlock2.Text = $"Preparing... {progressBar.Value = _.PercentComplete}";
                     }
                     if (_.InstallState is AppInstallState.Completed)
                     {
-                        progressBar.Value = 0; if (!progressBar.IsIndeterminate) progressBar.IsIndeterminate = true;
+                        textBlock2.Text = "Preparing...";
+                        progressBar.Value = 0;
+                        if (!progressBar.IsIndeterminate) progressBar.IsIndeterminate = true;
                     }
                 }), source.Token));
             }
