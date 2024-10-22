@@ -52,7 +52,14 @@ sealed class Window : System.Windows.Window
         };
         canvas.Children.Add(progressBar); Canvas.SetLeft(progressBar, 11); Canvas.SetTop(progressBar, 46);
 
-        Closed += (_, _) => { try { appInstallItem.Cancel(); } catch { } };
+        CancellationTokenSource source = new();
+
+        Task task = default;
+
+        Closed += (_, _) =>
+        {
+            if (task is not null) { source.Cancel(); ((IAsyncResult)task).AsyncWaitHandle.WaitOne(); }
+        };
 
         Dispatcher.UnhandledException += (_, e) =>
         {
@@ -62,61 +69,13 @@ sealed class Window : System.Windows.Window
             Close();
         };
 
-        ContentRendered += async (_, _) => await Task.Run(() =>
+        ContentRendered += async (_, _) =>
         {
-            using AutoResetEvent autoResetEvent = new(false);
-            PackageManager packageManager = new();
-            AppUpdateOptions updateOptions = new() { AutomaticallyDownloadAndInstallUpdateIfFound = true };
-
-            foreach (var appInstallItem in new (string productId, string packageFamilyName)[] { 
-                ("9WZDNCRD1HKW", "Microsoft.XboxIdentityProvider_8wekyb3d8bbwe"), _ ? 
-                ("9P5X4QVLC2XR", "Microsoft.MinecraftWindowsBeta_8wekyb3d8bbwe") : 
-                ("9NBLGGH2JHXJ", "Microsoft.MinecraftUWP_8wekyb3d8bbwe") }.Select(_ =>
+            foreach (var productId in new string[] { "9WZDNCRD1HKW", _ ? "9P5X4QVLC2XR" : "9NBLGGH2JHXJ" })
             {
-                var appInstallItem = appInstallManager.AppInstallItems.FirstOrDefault(appInstallItem => appInstallItem.ProductId.Equals(_.productId, StringComparison.OrdinalIgnoreCase));
-                if (appInstallItem is not null)
-                {
-                    appInstallManager.MoveToFrontOfDownloadQueue(_.productId, string.Empty);
-                    return appInstallItem;
-                }
-
-                return (packageManager.FindPackagesForUser(string.Empty, _.packageFamilyName).Any()
-                ? appInstallManager.SearchForUpdatesAsync(_.productId, string.Empty, string.Empty, string.Empty, updateOptions)
-                : appInstallManager.StartAppInstallAsync(_.productId, string.Empty, default, default)).AsTask().Result;
-            }))
-            {
-                if (appInstallItem is null) continue;
-                AppInstallStatus appInstallStatus = default;
-                (this.appInstallItem = appInstallItem).StatusChanged += (sender, args) => Dispatcher.Invoke(() =>
-                {
-                    if (progressBar.Value != (appInstallStatus = sender.GetCurrentStatus()).PercentComplete && appInstallStatus.PercentComplete != 0)
-                    {
-                        if (progressBar.IsIndeterminate) progressBar.IsIndeterminate = false;
-                        textBlock2.Text = $"Preparing... {progressBar.Value = appInstallStatus.PercentComplete}%";
-                    }
-
-                    if (appInstallStatus.InstallState is AppInstallState.Canceled or AppInstallState.Error or AppInstallState.Completed)
-                    {
-                        if (!progressBar.IsIndeterminate) progressBar.IsIndeterminate = true;
-                        progressBar.Value = 0;
-                        textBlock2.Text = "Preparing...";
-                        autoResetEvent.Set();
-                    }
-                    else if (appInstallStatus.InstallState
-                    is AppInstallState.Paused
-                    or AppInstallState.PausedLowBattery
-                    or AppInstallState.PausedWiFiRecommended
-                    or AppInstallState.PausedWiFiRequired or AppInstallState.ReadyToDownload)
-                    {
-                        if (!progressBar.IsIndeterminate) progressBar.IsIndeterminate = true;
-                        textBlock2.Text = "Preparing..."; progressBar.Value = 0;
-                        appInstallManager.MoveToFrontOfDownloadQueue(sender.ProductId, string.Empty);
-                    }
-                });
-                autoResetEvent.WaitOne();
-                if (appInstallStatus.InstallState is AppInstallState.Error or AppInstallState.Canceled) throw appInstallStatus.ErrorCode;
+                await (task = Store.GetAsync(productId, (_) => { }, source.Token));
+                Close();
             }
-            Dispatcher.Invoke(Close);
-        });
+        };
     }
 }
