@@ -79,8 +79,8 @@ static class Store
         item.Completed += (sender, _) => @event.Set();
         item.StatusChanged += (sender, _) =>
         {
-            if (token.IsCancellationRequested) { try { sender.Cancel(); } catch { } return; }
-            
+            if (token.IsCancellationRequested) { sender.Cancel(); return; }
+
             action(status = sender.GetCurrentStatus());
 
             if (status.InstallState is AppInstallState.Paused or AppInstallState.PausedLowBattery or AppInstallState.PausedWiFiRecommended or AppInstallState.PausedWiFiRequired or AppInstallState.ReadyToDownload)
