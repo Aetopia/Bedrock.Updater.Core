@@ -21,6 +21,7 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Windows.SDK.Contracts" Version="10.0.19041.2" />
+    <Reference Include="System.Web.Extensions" />
     <EmbeddedResource Include="Resources/.ico">
       <LogicalName>.ico</LogicalName>
     </EmbeddedResource>

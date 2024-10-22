@@ -56,10 +56,7 @@ sealed class Window : System.Windows.Window
 
         Task task = default;
 
-        Closed += (_, _) =>
-        {
-            if (task is not null) { source.Cancel(); ((IAsyncResult)task).AsyncWaitHandle.WaitOne(); }
-        };
+        Closed += (_, _) => { source.Cancel(); using var handle = ((IAsyncResult)task)?.AsyncWaitHandle; handle.WaitOne(); };
 
         Dispatcher.UnhandledException += (_, e) =>
         {
@@ -74,8 +71,8 @@ sealed class Window : System.Windows.Window
             foreach (var productId in new string[] { "9WZDNCRD1HKW", _ ? "9P5X4QVLC2XR" : "9NBLGGH2JHXJ" })
             {
                 await (task = Store.GetAsync(productId, (_) => { }, source.Token));
-                Close();
             }
+            Close();
         };
     }
 }
