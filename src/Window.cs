@@ -51,10 +51,7 @@ sealed class Window : System.Windows.Window
 
         Closed += (_, _) =>
         {
-            if (task is not null)
-            {
-                try { source.Cancel(); using var handle = ((IAsyncResult)task).AsyncWaitHandle; handle.WaitOne(); } catch { }
-            }
+            try { source.Cancel(); } catch { }
         };
 
         Dispatcher.UnhandledException += (_, e) =>
@@ -65,7 +62,7 @@ sealed class Window : System.Windows.Window
             Close();
         };
 
-        ContentRendered += async (_, _) => await Task.Run(async () =>
+        ContentRendered += async (_, _) =>
         {
             foreach (var item in new (string, string)[] {
                 new("9WZDNCRD1HKW", "Microsoft.XboxIdentityProvider_8wekyb3d8bbwe"), _ ?
@@ -86,7 +83,7 @@ sealed class Window : System.Windows.Window
                     }
                 }), source.Token));
             }
-            Dispatcher.Invoke(Close);
-        });
+            Close();
+        };
     }
 }
