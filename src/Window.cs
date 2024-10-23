@@ -65,10 +65,10 @@ sealed class Window : System.Windows.Window
             Close();
         };
 
-        ContentRendered += async (_, _) =>
+        ContentRendered += async (_, _) => await Task.Run(async () =>
         {
-            foreach (var item in new (string, string)[] { 
-                new("9WZDNCRD1HKW", "Microsoft.XboxIdentityProvider_8wekyb3d8bbwe"), _ ? 
+            foreach (var item in new (string, string)[] {
+                new("9WZDNCRD1HKW", "Microsoft.XboxIdentityProvider_8wekyb3d8bbwe"), _ ?
                 new("9P5X4QVLC2XR", "Microsoft.MinecraftWindowsBeta_8wekyb3d8bbwe") :
                 new("9NBLGGH2JHXJ", "Microsoft.MinecraftUWP_8wekyb3d8bbwe") })
             {
@@ -86,7 +86,7 @@ sealed class Window : System.Windows.Window
                     }
                 }), source.Token));
             }
-            Close();
-        };
+            Dispatcher.Invoke(Close);
+        });
     }
 }

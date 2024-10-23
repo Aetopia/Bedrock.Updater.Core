@@ -46,6 +46,6 @@ static class Store
             }
         };
 
-        await source.Task.ConfigureAwait(false); ; if (status.ErrorCode is not null) throw status.ErrorCode;
+        await source.Task.ConfigureAwait(false); if (status.ErrorCode is not null) throw status.ErrorCode;
     }
 }
