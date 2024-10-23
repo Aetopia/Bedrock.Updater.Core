@@ -1,7 +1,4 @@
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -9,46 +6,6 @@ using Windows.ApplicationModel.Store.Preview.InstallControl;
 
 static class Store
 {
-    readonly struct _ : INotifyCompletion
-    {
-        internal readonly bool IsCompleted => SynchronizationContext.Current is null;
-
-        internal readonly _ GetAwaiter() => this;
-
-        internal readonly void GetResult() { }
-
-        public readonly void OnCompleted(Action continuation)
-        {
-            var _ = SynchronizationContext.Current;
-            try { SynchronizationContext.SetSynchronizationContext(null); continuation(); }
-            finally { SynchronizationContext.SetSynchronizationContext(_); }
-        }
-    }
-
-    struct Event()
-    {
-        readonly static Task task = Task.FromResult(true);
-
-        internal readonly Queue<TaskCompletionSource<bool>> queue = new();
-
-        bool signaled = default;
-
-        internal Task WaitAsync()
-        {
-            lock (queue)
-            {
-                if (signaled) { signaled = false; return task; }
-                TaskCompletionSource<bool> item = new(); queue.Enqueue(item); return item.Task;
-            }
-        }
-
-        internal void Set()
-        {
-            TaskCompletionSource<bool> item = default;
-            lock (queue) if (queue.Count > 0) item = queue.Dequeue(); else if (!signaled) signaled = true;
-            item?.SetResult(true);
-        }
-    }
 
     [DllImport("Kernel32"), DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
     static extern long GetPackagesByPackageFamily([MarshalAs(UnmanagedType.LPWStr)] string packageFamilyName, out uint count, nint packageFullNames, out uint bufferLength, nint buffer);
@@ -59,43 +16,36 @@ static class Store
 
     readonly static AppUpdateOptions options = new() { AutomaticallyDownloadAndInstallUpdateIfFound = true };
 
-    static async Task<AppInstallItem> GetAsync((string, string) tuple)
+    internal static async Task GetAsync((string Id, string Name) product, Action<AppInstallStatus> action, CancellationToken token)
     {
-        var item = manager.AppInstallItems.FirstOrDefault(_ => _.ProductId.Equals(tuple.Item1, StringComparison.OrdinalIgnoreCase)) ?? await
-        (GetPackagesByPackageFamily(tuple.Item2, out var _, default, out var _, default) == ERROR_INSUFFICIENT_BUFFER
-        ? manager.SearchForUpdatesAsync(tuple.Item1, string.Empty, string.Empty, string.Empty, options)
-        : manager.StartAppInstallAsync(tuple.Item1, string.Empty, false, false));
-        if (item is not null) manager.MoveToFrontOfDownloadQueue(tuple.Item1, string.Empty);
-        return item;
-    }
+        var item = await (GetPackagesByPackageFamily(product.Name, out var _, default, out var _, default) == ERROR_INSUFFICIENT_BUFFER
+        ? manager.SearchForUpdatesAsync(product.Id, string.Empty, string.Empty, string.Empty, options)
+        : manager.StartAppInstallAsync(product.Id, string.Empty, false, false)).AsTask().ConfigureAwait(false);
+        if (item is not null) manager.MoveToFrontOfDownloadQueue(product.Id, string.Empty); else return;
+        token.Register(item.Cancel);
 
-    internal static async Task GetAsync((string, string) tuple, Action<AppInstallStatus> action, CancellationToken token)
-    {
-        await new _();
-
-        var item = await GetAsync(tuple); if (item is null) return;
-        Event @event = new(); AppInstallStatus status = default;
+        TaskCompletionSource<bool> source = new(); AppInstallStatus status = default;
 
         item.StatusChanged += (sender, _) =>
         {
             status = sender.GetCurrentStatus();
-
-            if (status.InstallState is AppInstallState.Completed or AppInstallState.Canceled or AppInstallState.Error)
+            switch (status.InstallState)
             {
-                if (status.InstallState is AppInstallState.Error) sender.Cancel();
-                @event.Set();
-            }
-            if (token.IsCancellationRequested) { sender.Cancel(); return; }
+                case AppInstallState.Completed or AppInstallState.Canceled or AppInstallState.Error:
+                    if (status.InstallState is AppInstallState.Error) sender.Cancel();
+                    source.SetResult(true);
+                    break;
 
-            action(status);
-            if (status.InstallState
-            is AppInstallState.Paused
-            or AppInstallState.PausedLowBattery
-            or AppInstallState.PausedWiFiRecommended
-            or AppInstallState.PausedWiFiRequired
-            or AppInstallState.ReadyToDownload) manager.MoveToFrontOfDownloadQueue(sender.ProductId, string.Empty);
+                case AppInstallState.Paused or AppInstallState.PausedLowBattery or AppInstallState.PausedWiFiRecommended or AppInstallState.PausedWiFiRequired or AppInstallState.ReadyToDownload:
+                    manager.MoveToFrontOfDownloadQueue(sender.ProductId, string.Empty);
+                    break;
+
+                default:
+                    action(status);
+                    break;
+            }
         };
-        
-        await @event.WaitAsync(); if (status.ErrorCode is not null) throw status.ErrorCode;
+
+        await source.Task.ConfigureAwait(false); ; if (status.ErrorCode is not null) throw status.ErrorCode;
     }
 }

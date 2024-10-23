@@ -5,7 +5,6 @@ using System.Windows.Interop;
 using System.Threading.Tasks;
 using System.Windows.Controls;
 using System.Runtime.InteropServices;
-using Windows.ApplicationModel.Store.Preview.InstallControl;
 using System.Threading;
 using System.Reflection;
 using System.Windows.Media.Imaging;
@@ -54,7 +53,7 @@ sealed class Window : System.Windows.Window
         {
             if (task is not null)
             {
-                source.Cancel(); using var handle = ((IAsyncResult)task).AsyncWaitHandle; handle.WaitOne();
+                try { source.Cancel(); using var handle = ((IAsyncResult)task).AsyncWaitHandle; handle.WaitOne(); } catch { }
             }
         };
 
@@ -68,24 +67,22 @@ sealed class Window : System.Windows.Window
 
         ContentRendered += async (_, _) =>
         {
-            foreach (var item in new (string, string)[] {
-                new("9WZDNCRD1HKW", "Microsoft.XboxIdentityProvider_8wekyb3d8bbwe"), _ ?
+            foreach (var item in new (string, string)[] { 
+                new("9WZDNCRD1HKW", "Microsoft.XboxIdentityProvider_8wekyb3d8bbwe"), _ ? 
                 new("9P5X4QVLC2XR", "Microsoft.MinecraftWindowsBeta_8wekyb3d8bbwe") :
-                new("9NBLGGH2JHXJ", "Microsoft.MinecraftUWP_8wekyb3d8bbwe")
-            })
+                new("9NBLGGH2JHXJ", "Microsoft.MinecraftUWP_8wekyb3d8bbwe") })
             {
-                await (task = Store.GetAsync(item, (_) => Dispatcher.Invoke(() =>
+                using (source = new()) await (task = Store.GetAsync(item, (_) => Dispatcher.Invoke(() =>
                 {
                     if (progressBar.Value != _.PercentComplete)
                     {
                         if (progressBar.IsIndeterminate) progressBar.IsIndeterminate = false;
-                        textBlock2.Text = $"Preparing... {progressBar.Value = _.PercentComplete}%";
+                        textBlock2.Text = $"Preparing...  {progressBar.Value = _.PercentComplete}%";
                     }
-                    if (_.InstallState is AppInstallState.Completed)
+                    else if (_.PercentComplete is 0 or 100)
                     {
-                        textBlock2.Text = "Preparing...";
-                        progressBar.Value = 0;
                         if (!progressBar.IsIndeterminate) progressBar.IsIndeterminate = true;
+                        textBlock2.Text = "Preparing..."; progressBar.Value = 0;
                     }
                 }), source.Token));
             }
