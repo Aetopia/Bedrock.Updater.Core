@@ -16,12 +16,9 @@ Currently that suffices the functionality of the project with 0 issues.
 
 For the purpose of futureproofing Bedrock Updater, Bedrock Updater Core was created.
 
-## How?
+The Windows Runtime provides a proper API called [`Windows.ApplicationModel.Store.Preview.InstallControl.AppInstallManager`](https://learn.microsoft.com/uwp/api/windows.applicationmodel.store.preview.installcontrol.appinstallmanager) to install & update apps from the Microsoft Store.
 
-Bedrock Updater Core leverages the Windows Runtime to provide the ability to install & update Minecraft: Bedrock Edition.
-The project uses [`Windows.ApplicationModel.Store.Preview.InstallControl.AppInstallManager`](https://learn.microsoft.com/uwp/api/windows.applicationmodel.store.preview.installcontrol.appinstallmanager) to install & update Minecraft: Bedrock Edition.
-
-It does much of the heavy lifting of interacting with Microsoft Store endpoints, it provides more of a pre-made abstraction but an official one.
+Bedrock Updater Core leverages this API to streamline & simplify operations to update & install Minecraft: Bedrock Edition. 
 
 ## Building
 1. Download the following:
