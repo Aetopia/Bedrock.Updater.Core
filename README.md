@@ -5,7 +5,7 @@ Bedrock Updater Core is an experimental spinoff of [Bedrock Updater](https://git
 ## Why?
 
 Bedrock Updater directly interacts with Microsoft Store endpoints to resolve & update app packages related to Minecraft: Bedrock Edition. 
-Since these endpoints aren't suppose to public, a lot of code needs to be handwritten to interact with endpoints. 
+Since these endpoints aren't suppose to public, a lot of code needs to be handwritten to interact with these endpoints. 
 
 When packages need to be resolved, the endpoints require a list of non-leaf update IDs. 
 These are used to determine what package versions to return. 
