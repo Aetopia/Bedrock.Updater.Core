@@ -1,13 +1,12 @@
-using System;
 using System.Windows;
+using System.Threading;
+using System.Reflection;
 using System.Windows.Media;
 using System.Windows.Interop;
 using System.Threading.Tasks;
 using System.Windows.Controls;
-using System.Runtime.InteropServices;
-using System.Threading;
-using System.Reflection;
 using System.Windows.Media.Imaging;
+using System.Runtime.InteropServices;
 
 sealed class Window : System.Windows.Window
 {

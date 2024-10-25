@@ -1,12 +1,11 @@
 using System;
-using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Runtime.InteropServices;
 using Windows.ApplicationModel.Store.Preview.InstallControl;
 
 static class Store
 {
-
     [DllImport("Kernel32"), DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
     static extern long GetPackagesByPackageFamily([MarshalAs(UnmanagedType.LPWStr)] string packageFamilyName, out uint count, nint packageFullNames, out uint bufferLength, nint buffer);
 
@@ -21,8 +20,7 @@ static class Store
         var item = await (GetPackagesByPackageFamily(product.Name, out var _, default, out var _, default) == ERROR_INSUFFICIENT_BUFFER
         ? manager.SearchForUpdatesAsync(product.Id, string.Empty, string.Empty, string.Empty, options)
         : manager.StartAppInstallAsync(product.Id, string.Empty, false, false)).AsTask().ConfigureAwait(false);
-        if (item is not null) manager.MoveToFrontOfDownloadQueue(product.Id, string.Empty); else return;
-        token.Register(item.Cancel);
+        if (item is not null) manager.MoveToFrontOfDownloadQueue(product.Id, string.Empty); else return; token.Register(item.Cancel);
 
         TaskCompletionSource<bool> source = new(); AppInstallStatus status = default;
 
