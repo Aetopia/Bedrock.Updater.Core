@@ -23,4 +23,13 @@ The project uses [`Windows.ApplicationModel.Store.Preview.InstallControl.AppInst
 
 It does much of the heavy lifting of interacting with Microsoft Store endpoints, it provides more of a pre-made abstraction but an official one.
 
+## Building
+1. Download the following:
+    - [.NET SDK](https://dotnet.microsoft.com/en-us/download)
+    - [.NET Framework 4.8.1 Developer Pack](https://dotnet.microsoft.com/en-us/download/dotnet-framework/thank-you/net481-developer-pack-offline-installer)
 
+2. Run the following command to compile:
+
+    ```cmd
+    dotnet publish "src\Bedrock.Updater.Core.csproj"
+    ```
