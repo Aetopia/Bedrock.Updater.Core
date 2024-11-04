@@ -20,30 +20,35 @@ static class Store
         var item = await (GetPackagesByPackageFamily(product.Name, out var _, default, out var _, default) == ERROR_INSUFFICIENT_BUFFER
         ? manager.SearchForUpdatesAsync(product.Id, string.Empty, string.Empty, string.Empty, options)
         : manager.StartAppInstallAsync(product.Id, string.Empty, false, false)).AsTask().ConfigureAwait(false);
-        if (item is not null) manager.MoveToFrontOfDownloadQueue(product.Id, string.Empty); else return; token.Register(item.Cancel);
+        if (item is not null) manager.MoveToFrontOfDownloadQueue(product.Id, string.Empty); else return;
 
-        TaskCompletionSource<bool> source = new(); AppInstallStatus status = default;
-
-        item.StatusChanged += (sender, _) =>
+        using (token.Register(item.Cancel))
         {
-            status = sender.GetCurrentStatus();
-            switch (status.InstallState)
+            TaskCompletionSource<bool> source = new();
+            item.Completed += (_, _) => source.TrySetResult(true);
+
+            AppInstallStatus status = default;
+            item.StatusChanged += (sender, _) =>
             {
-                case AppInstallState.Completed or AppInstallState.Canceled or AppInstallState.Error:
-                    if (status.InstallState is AppInstallState.Error) sender.Cancel();
-                    source.SetResult(true);
-                    break;
+                status = sender.GetCurrentStatus();
+                switch (status.InstallState)
+                {
+                    case AppInstallState.Error:
+                        sender.Cancel();
+                        break;
 
-                case AppInstallState.Paused or AppInstallState.PausedLowBattery or AppInstallState.PausedWiFiRecommended or AppInstallState.PausedWiFiRequired or AppInstallState.ReadyToDownload:
-                    manager.MoveToFrontOfDownloadQueue(sender.ProductId, string.Empty);
-                    break;
+                    case AppInstallState.Paused or AppInstallState.PausedLowBattery or AppInstallState.PausedWiFiRecommended or AppInstallState.PausedWiFiRequired or AppInstallState.ReadyToDownload:
+                        manager.MoveToFrontOfDownloadQueue(sender.ProductId, string.Empty);
+                        break;
 
-                default:
-                    action(status);
-                    break;
-            }
-        };
+                    default:
+                        action(status);
+                        break;
+                }
+            };
 
-        await source.Task.ConfigureAwait(false); if (status.ErrorCode is not null) throw status.ErrorCode;
+            await source.Task.ConfigureAwait(false);
+            if (status.ErrorCode is not null && !token.IsCancellationRequested) throw status.ErrorCode;
+        }
     }
 }

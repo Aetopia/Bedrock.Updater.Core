@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using System.Windows.Controls;
 using System.Windows.Media.Imaging;
 using System.Runtime.InteropServices;
+using System;
 
 sealed class Window : System.Windows.Window
 {
@@ -44,14 +45,9 @@ sealed class Window : System.Windows.Window
         };
         canvas.Children.Add(progressBar); Canvas.SetLeft(progressBar, 11); Canvas.SetTop(progressBar, 46);
 
-        CancellationTokenSource source = new();
+        Task task = default; CancellationTokenSource source = new();
 
-        Task task = default;
-
-        Closed += (_, _) =>
-        {
-            try { source.Cancel(); } catch { }
-        };
+        Closed += (_, _) => { using (source) { source.Cancel(); ((IAsyncResult)task)?.AsyncWaitHandle.WaitOne(); } };
 
         Dispatcher.UnhandledException += (_, e) =>
         {
@@ -68,7 +64,7 @@ sealed class Window : System.Windows.Window
                 new("9P5X4QVLC2XR", "Microsoft.MinecraftWindowsBeta_8wekyb3d8bbwe") :
                 new("9NBLGGH2JHXJ", "Microsoft.MinecraftUWP_8wekyb3d8bbwe") })
             {
-                using (source = new()) await (task = Store.GetAsync(item, (_) => Dispatcher.Invoke(() =>
+                await (task = Store.GetAsync(item, (_) => Dispatcher.Invoke(() =>
                 {
                     if (progressBar.Value != _.PercentComplete)
                     {
