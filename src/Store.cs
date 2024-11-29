@@ -11,44 +11,64 @@ static class Store
 
     const long ERROR_INSUFFICIENT_BUFFER = 0x7A;
 
-    readonly static AppInstallManager manager = new();
+    readonly static AppInstallManager AppInstallManager = new();
 
-    readonly static AppUpdateOptions options = new() { AutomaticallyDownloadAndInstallUpdateIfFound = true };
-
-    internal static async Task GetAsync((string Id, string Name) product, Action<AppInstallStatus> action, CancellationToken token)
+    readonly static AppUpdateOptions AppUpdateOptions = new()
     {
-        var item = await (GetPackagesByPackageFamily(product.Name, out var _, default, out var _, default) == ERROR_INSUFFICIENT_BUFFER
-        ? manager.SearchForUpdatesAsync(product.Id, string.Empty, string.Empty, string.Empty, options)
-        : manager.StartAppInstallAsync(product.Id, string.Empty, false, false)).AsTask().ConfigureAwait(false);
-        if (item is not null) manager.MoveToFrontOfDownloadQueue(product.Id, string.Empty); else return;
+        AutomaticallyDownloadAndInstallUpdateIfFound = true,
+        AllowForcedAppRestart = true
+    };
 
-        using (token.Register(item.Cancel))
+    static async Task<AppInstallItem> GetAsync((string ProductId, string PackageFamilyName) _, CancellationToken token)
+    {
+        var operation = GetPackagesByPackageFamily(_.PackageFamilyName, out var _, default, out var _, default) == ERROR_INSUFFICIENT_BUFFER
+        ? AppInstallManager.SearchForUpdatesAsync(_.ProductId, string.Empty, string.Empty, string.Empty, AppUpdateOptions)
+        : AppInstallManager.StartAppInstallAsync(_.ProductId, string.Empty, false, false);
+
+        var task = operation.AsTask(); using (token.Register(() =>
         {
-            TaskCompletionSource<bool> source = new();
-            item.Completed += (_, _) => source.TrySetResult(true);
+            operation.Cancel();
+            ((IAsyncResult)task).AsyncWaitHandle.WaitOne();
+        })) return await task.ConfigureAwait(false);
+    }
 
-            AppInstallStatus status = default;
-            item.StatusChanged += (sender, _) =>
+    internal static async Task GetAsync((string ProductId, string PackageFamilyName) _, Action<AppInstallStatus> action, CancellationToken token)
+    {
+        var item = await GetAsync(_, token); if (item is not null) AppInstallManager.MoveToFrontOfDownloadQueue(_.ProductId, string.Empty); else return;
+
+        AppInstallStatus status = default; TaskCompletionSource<bool> source = new(); using (token.Register(() =>
+        {
+            item.Cancel();
+            ((IAsyncResult)source.Task).AsyncWaitHandle.WaitOne();
+        }))
+        {
+            void StatusChanged(AppInstallItem sender, object args)
             {
-                status = sender.GetCurrentStatus();
-                switch (status.InstallState)
+                switch ((status = sender.GetCurrentStatus()).InstallState)
                 {
                     case AppInstallState.Error:
-                        sender.Cancel();
+                        sender.StatusChanged -= StatusChanged;
+                        sender.Cancel(); source.TrySetException(status.ErrorCode);
                         break;
 
                     case AppInstallState.Paused or AppInstallState.PausedLowBattery or AppInstallState.PausedWiFiRecommended or AppInstallState.PausedWiFiRequired or AppInstallState.ReadyToDownload:
-                        manager.MoveToFrontOfDownloadQueue(sender.ProductId, string.Empty);
+                        AppInstallManager.MoveToFrontOfDownloadQueue(sender.ProductId, string.Empty);
                         break;
 
                     default:
                         action(status);
                         break;
                 }
+            }
+
+            item.StatusChanged += StatusChanged; item.Completed += (_, _) =>
+            {
+                if (status.InstallState is AppInstallState.Canceled) source.TrySetCanceled();
+                else source.TrySetResult(true);
             };
 
             await source.Task.ConfigureAwait(false);
-            if (status.ErrorCode is not null && !token.IsCancellationRequested) throw status.ErrorCode;
         }
     }
+
 }

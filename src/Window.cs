@@ -47,7 +47,7 @@ sealed class Window : System.Windows.Window
 
         Task task = default; CancellationTokenSource source = new();
 
-        Closed += (_, _) => { using (source) { source.Cancel(); ((IAsyncResult)task)?.AsyncWaitHandle.WaitOne(); } };
+        Closed += (_, _) => { using (source) source.Cancel(); };
 
         Dispatcher.UnhandledException += (_, e) =>
         {
@@ -59,17 +59,17 @@ sealed class Window : System.Windows.Window
 
         ContentRendered += async (_, _) =>
         {
-            foreach (var item in new (string, string)[] {
-                new("9WZDNCRD1HKW", "Microsoft.XboxIdentityProvider_8wekyb3d8bbwe"), _ ?
-                new("9P5X4QVLC2XR", "Microsoft.MinecraftWindowsBeta_8wekyb3d8bbwe") :
+            foreach (var _ in new (string, string)[] { 
+                new("9WZDNCRD1HKW", "Microsoft.XboxIdentityProvider_8wekyb3d8bbwe"), _ ? 
+                new("9P5X4QVLC2XR", "Microsoft.MinecraftWindowsBeta_8wekyb3d8bbwe") : 
                 new("9NBLGGH2JHXJ", "Microsoft.MinecraftUWP_8wekyb3d8bbwe") })
             {
-                await (task = Store.GetAsync(item, (_) => Dispatcher.Invoke(() =>
+                await (task = Store.GetAsync(_, (_) => Dispatcher.Invoke(() =>
                 {
                     if (progressBar.Value != _.PercentComplete)
                     {
                         if (progressBar.IsIndeterminate) progressBar.IsIndeterminate = false;
-                        textBlock2.Text = $"Preparing...  {progressBar.Value = _.PercentComplete}%";
+                        textBlock2.Text = $"Preparing... {progressBar.Value = _.PercentComplete}%";
                     }
                     else if (_.PercentComplete is 0 or 100)
                     {
