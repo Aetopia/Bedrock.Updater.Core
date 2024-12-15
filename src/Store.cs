@@ -70,5 +70,4 @@ static class Store
             await source.Task.ConfigureAwait(false);
         }
     }
-
 }
