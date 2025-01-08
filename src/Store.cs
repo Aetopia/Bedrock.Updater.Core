@@ -99,8 +99,7 @@ static class Store
                 }
 
                 item.Completed += Completed; item.StatusChanged += StatusChanged;
-                try { await source.Task; }
-                catch { item.Completed -= Completed; item.StatusChanged -= StatusChanged; }
+                try { await source.Task; } catch { item.Completed -= Completed; item.StatusChanged -= StatusChanged; }
             }
         }
     }
