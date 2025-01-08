@@ -75,17 +75,24 @@ static class Store
                     var status = sender.GetCurrentStatus();
                     switch (status.InstallState)
                     {
-                        case AppInstallState.Error:
-                            sender.Completed -= Completed; sender.StatusChanged -= StatusChanged;
-                            sender.Cancel(); source.TrySetException(status.ErrorCode);
-                            break;
+                        case AppInstallState.Error or AppInstallState.Canceled or AppInstallState.Completed:
+                            sender.Completed -= Completed;
+                            sender.StatusChanged -= StatusChanged;
+                            switch (status.InstallState)
+                            {
+                                case AppInstallState.Error:
+                                    sender.Cancel();
+                                    source.TrySetException(status.ErrorCode);
+                                    break;
 
-                        case AppInstallState.Canceled:
-                            source.TrySetCanceled();
-                            break;
+                                case AppInstallState.Canceled:
+                                    source.TrySetCanceled();
+                                    break;
 
-                        case AppInstallState.Completed:
-                            source.TrySetResult(true);
+                                case AppInstallState.Completed:
+                                    source.TrySetResult(true);
+                                    break;
+                            }
                             break;
 
                         case AppInstallState.Paused or AppInstallState.PausedLowBattery or AppInstallState.PausedWiFiRecommended or AppInstallState.PausedWiFiRequired or AppInstallState.ReadyToDownload:
@@ -98,8 +105,9 @@ static class Store
                     }
                 }
 
-                item.Completed += Completed; item.StatusChanged += StatusChanged;
-                try { await source.Task; } catch { item.Completed -= Completed; item.StatusChanged -= StatusChanged; }
+                item.Completed += Completed;
+                item.StatusChanged += StatusChanged;
+                await source.Task;
             }
         }
     }
