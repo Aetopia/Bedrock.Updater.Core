@@ -59,25 +59,19 @@ sealed class Window : System.Windows.Window
 
         ContentRendered += async (_, _) =>
         {
-            foreach (var _ in new (string, string)[] { 
-                new("9WZDNCRD1HKW", "Microsoft.XboxIdentityProvider_8wekyb3d8bbwe"), _ ? 
-                new("9P5X4QVLC2XR", "Microsoft.MinecraftWindowsBeta_8wekyb3d8bbwe") : 
-                new("9NBLGGH2JHXJ", "Microsoft.MinecraftUWP_8wekyb3d8bbwe") })
+            await (task = Store.GetAsync(["9WZDNCRD1HKW", _ ? "9P5X4QVLC2XR" : "9NBLGGH2JHXJ"], (_) => Dispatcher.Invoke(() =>
             {
-                await (task = Store.GetAsync(_, (_) => Dispatcher.Invoke(() =>
+                if (progressBar.Value != _.PercentComplete)
                 {
-                    if (progressBar.Value != _.PercentComplete)
-                    {
-                        if (progressBar.IsIndeterminate) progressBar.IsIndeterminate = false;
-                        textBlock2.Text = $"Preparing... {progressBar.Value = _.PercentComplete}%";
-                    }
-                    else if (_.PercentComplete is 0 or 100)
-                    {
-                        if (!progressBar.IsIndeterminate) progressBar.IsIndeterminate = true;
-                        textBlock2.Text = "Preparing..."; progressBar.Value = 0;
-                    }
-                }), source.Token));
-            }
+                    if (progressBar.IsIndeterminate) progressBar.IsIndeterminate = false;
+                    textBlock2.Text = $"Preparing... {progressBar.Value = _.PercentComplete}%";
+                }
+                else if (_.PercentComplete is 0 or 100)
+                {
+                    if (!progressBar.IsIndeterminate) progressBar.IsIndeterminate = true;
+                    textBlock2.Text = "Preparing..."; progressBar.Value = 0;
+                }
+            }), source.Token));
             Close();
         };
     }
