@@ -45,7 +45,7 @@ sealed class Window : System.Windows.Window
         };
         canvas.Children.Add(progressBar); Canvas.SetLeft(progressBar, 11); Canvas.SetTop(progressBar, 46);
 
-        Task task = default; CancellationTokenSource source = new();
+        CancellationTokenSource source = new();
 
         Closed += (_, _) => { using (source) source.Cancel(); };
 
@@ -59,7 +59,7 @@ sealed class Window : System.Windows.Window
 
         ContentRendered += async (_, _) =>
         {
-            await (task = Store.GetAsync(["9WZDNCRD1HKW", _ ? "9P5X4QVLC2XR" : "9NBLGGH2JHXJ"], (_) => Dispatcher.Invoke(() =>
+            await Store.GetAsync(["9WZDNCRD1HKW", _ ? "9P5X4QVLC2XR" : "9NBLGGH2JHXJ"], (_) => Dispatcher.Invoke(() =>
             {
                 if (progressBar.Value != _.PercentComplete)
                 {
@@ -71,7 +71,7 @@ sealed class Window : System.Windows.Window
                     if (!progressBar.IsIndeterminate) progressBar.IsIndeterminate = true;
                     textBlock2.Text = "Preparing..."; progressBar.Value = 0;
                 }
-            }), source.Token));
+            }), source.Token);
             Close();
         };
     }
