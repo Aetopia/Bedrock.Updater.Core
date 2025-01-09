@@ -57,58 +57,60 @@ static class Store
     ? await AppInstallManager.SearchForUpdatesAsync(productId, string.Empty, string.Empty, string.Empty, AppUpdateOptions)
     : await AppInstallManager.StartAppInstallAsync(productId, string.Empty, false, false));
 
+    static async Task GetAsync(string productId, Action<AppInstallStatus> action, CancellationToken token = default)
+    {
+        var item = await AppInstallItemAsync(productId); if (item is null) return;
+        AppInstallManager.MoveToFrontOfDownloadQueue(item.ProductId, string.Empty);
+
+        TaskCompletionSource<bool> source = new();
+        using var _ = token.Register(() => { item.Cancel(); ((IAsyncResult)source.Task).AsyncWaitHandle.WaitOne(); });
+
+        item.Completed += (sender, _) =>
+        {
+            var status = sender.GetCurrentStatus();
+            switch (status.InstallState)
+            {
+                case AppInstallState.Completed:
+                    source.TrySetResult(true);
+                    break;
+
+                case AppInstallState.Canceled:
+                    if (!source.Task.IsFaulted) source.TrySetException(status.ErrorCode);
+                    break;
+            }
+        };
+
+        item.StatusChanged += (sender, _) =>
+        {
+            var status = sender.GetCurrentStatus();
+            switch (status.InstallState)
+            {
+                case AppInstallState.Error:
+                    source.TrySetException(status.ErrorCode);
+                    sender.Cancel();
+                    break;
+
+                case AppInstallState.Paused
+                or AppInstallState.ReadyToDownload
+                or AppInstallState.PausedLowBattery
+                or AppInstallState.PausedWiFiRequired
+                or AppInstallState.PausedWiFiRecommended:
+                    AppInstallManager.MoveToFrontOfDownloadQueue(sender.ProductId, string.Empty);
+                    break;
+
+                default:
+                    action(status);
+                    break;
+            }
+        };
+
+        await source.Task;
+    }
+
     internal static async Task GetAsync(string[] productIds, Action<AppInstallStatus> action, CancellationToken token = default)
     {
         await new _();
         foreach (var productId in productIds)
-        {
-            var item = await AppInstallItemAsync(productId); if (item is null) continue;
-            AppInstallManager.MoveToFrontOfDownloadQueue(item.ProductId, string.Empty);
-
-            TaskCompletionSource<bool> source = new();
-            using (token.Register(() => { item.Cancel(); ((IAsyncResult)source.Task).AsyncWaitHandle.WaitOne(); }))
-            {
-                void Completed(AppInstallItem sender, object _) => source.TrySetResult(true);
-
-                void StatusChanged(AppInstallItem sender, object _)
-                {
-                    var status = sender.GetCurrentStatus();
-                    switch (status.InstallState)
-                    {
-                        case AppInstallState.Error or AppInstallState.Canceled or AppInstallState.Completed:
-                            sender.Completed -= Completed;
-                            sender.StatusChanged -= StatusChanged;
-                            switch (status.InstallState)
-                            {
-                                case AppInstallState.Error:
-                                    sender.Cancel();
-                                    source.TrySetException(status.ErrorCode);
-                                    break;
-
-                                case AppInstallState.Canceled:
-                                    source.TrySetCanceled();
-                                    break;
-
-                                case AppInstallState.Completed:
-                                    source.TrySetResult(true);
-                                    break;
-                            }
-                            break;
-
-                        case AppInstallState.Paused or AppInstallState.PausedLowBattery or AppInstallState.PausedWiFiRecommended or AppInstallState.PausedWiFiRequired or AppInstallState.ReadyToDownload:
-                            AppInstallManager.MoveToFrontOfDownloadQueue(sender.ProductId, string.Empty);
-                            break;
-
-                        default:
-                            action(status);
-                            break;
-                    }
-                }
-
-                item.Completed += Completed;
-                item.StatusChanged += StatusChanged;
-                await source.Task;
-            }
-        }
+            await GetAsync(productId, action, token);
     }
 }
