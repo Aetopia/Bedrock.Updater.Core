@@ -38,8 +38,8 @@ static class Store
 
     static readonly AppUpdateOptions AppUpdateOptions = new() { AllowForcedAppRestart = true, AutomaticallyDownloadAndInstallUpdateIfFound = true };
 
-    [DllImport("Kernel32", CharSet = CharSet.Auto), DefaultDllImportSearchPaths(DllImportSearchPath.System32), SuppressUnmanagedCodeSecurity]
-    static extern long GetPackagesByPackageFamily(string packageFamilyName, out uint count, nint packageFullNames, out uint bufferLength, nint buffer);
+    [DllImport("Kernel32", CharSet = CharSet.Auto), DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+    static extern long GetPackagesByPackageFamily([MarshalAs(UnmanagedType.LPWStr)] string packageFamilyName, out uint count, nint packageFullNames, out uint bufferLength, nint buffer);
 
     const long ERROR_INSUFFICIENT_BUFFER = 0x7A;
 
