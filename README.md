@@ -1,5 +1,5 @@
 > [!IMPORTANT]
-> Bedrock Updater [v3.0.0](https://github.com/Aetopia/BedrockUpdater/releases/tag/v3.0.0) now uses  [`Windows.ApplicationModel.Store.Preview.InstallControl.AppInstallManager`](https://learn.microsoft.com/uwp/api/windows.applicationmodel.store.preview.installcontrol.appinstallmanager).
+> Bedrock Updater [`v3.0.0`](https://github.com/Aetopia/BedrockUpdater/releases/tag/v3.0.0) now uses  [`Windows.ApplicationModel.Store.Preview.InstallControl.AppInstallManager`](https://learn.microsoft.com/uwp/api/windows.applicationmodel.store.preview.installcontrol.appinstallmanager).
 
 # Bedrock Updater Core
 
